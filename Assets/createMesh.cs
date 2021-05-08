@@ -1,7 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
+//using System.Threading;
+using UnityEngine.Jobs;
 public class Node
 {
     public Vector3 position;
@@ -16,6 +17,8 @@ public class Node
 
 public class createMesh : MonoBehaviour
 {
+
+
     public Material mat;
     public GameObject shadow_prefab;
 
@@ -28,7 +31,10 @@ public class createMesh : MonoBehaviour
     public float radius = 1;
     public List<Node> nodes;
 
+    // node creation
     Vector3 normvec;
+    Vector3 sp;
+    RaycastHit hitinfo;
 
     private Light[] lightsources;
 
@@ -108,6 +114,7 @@ public class createMesh : MonoBehaviour
                     nodes[i + resolution + 1],
                     x,y); //x y needed for walls at edge
             }
+
         }
     }
 
@@ -303,30 +310,42 @@ public class createMesh : MonoBehaviour
                     return false;
         return true;
     }
-    RaycastHit reticalRaycast()
+    void reticalRaycast()
     {
         Camera cam = gameObject.GetComponent<Camera>();
         Vector3 midpoint = new Vector3(cam.scaledPixelWidth / 2, cam.scaledPixelHeight / 2, 0);
         Ray midray = cam.ScreenPointToRay(midpoint);
-        RaycastHit hitinfo;
         Physics.Raycast(midray, out hitinfo);
         Debug.DrawRay(midray.origin, midray.direction *100f,Color.red,1f); //Debug.Log(midray.origin + ", " + midray.direction);
-        return hitinfo;
     }
 
     void getListofPoints( )
     {
         Camera cam = gameObject.GetComponent<Camera>();
-        RaycastHit hitinfo = reticalRaycast();
+        reticalRaycast();
 
+
+        normvec = hitinfo.normal;
+        sp = Vector3.one - new Vector3(Mathf.Abs(normvec.x), Mathf.Abs(normvec.y), Mathf.Abs(normvec.z)); // surfaceparallel
+        shadow_prefab.transform.position = hitinfo.point;
+
+        float start = Time.realtimeSinceStartup;
+        CreateNodes();
+        Debug.Log("Creating the nodes themselves took: " + (Time.realtimeSinceStartup - start));
+        /*
+        //get the current view
+        Texture2D view = getImage(cam);
+        Color32[] colors = view.GetPixels32();
+        resolution = view.width;
+        */
+        Triangulate();
+    }
+
+    void CreateNodes()
+    {
+        Vector3 point = hitinfo.point;
         float size = 2 * radius / resolution;
 
-        Vector3 point = hitinfo.point;
-        normvec = hitinfo.normal;
-        Vector3 sp = Vector3.one - new Vector3(Mathf.Abs(normvec.x), Mathf.Abs(normvec.y), Mathf.Abs(normvec.z)); // surfaceparallel
-
-        shadow_prefab.transform.position = point;
-        
         // adds up to (2*radius)^3 vertexes if on surface
         for (float x = -radius * sp.x; x < (radius - size) * sp.x + size; x += size)
             for (float y = -radius * sp.y; y < (radius - size) * sp.y + size; y += size)
@@ -340,17 +359,9 @@ public class createMesh : MonoBehaviour
                     else
                         Debug.Log("making empty node");
 
-                    nodes.Add(new Node(pos-point, size, state));
+                    nodes.Add(new Node(pos - point, size, state));
                 }
-        /*
-        //get the current view
-        Texture2D view = getImage(cam);
-        Color32[] colors = view.GetPixels32();
-        resolution = view.width;
-        */
-        Triangulate();
     }
-
     Texture2D getImage(Camera cam)
     {
         // The Render Texture in RenderTexture.active is the one
