@@ -1,56 +1,24 @@
-﻿using System.Collections.Generic;
-using Unity.Collections;
+﻿using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
 
-namespace InfallibleCode.Completed
-{
-    public class BuildingManager : MonoBehaviour
-    {
-        [SerializeField] private List<Building> buildings;
-        
-        private BuildingUpdateJob _job;
-        private NativeArray<Building.Data> _buildingDataArray;
 
-        private void Awake()
-        {
-            var buildingData = new Building.Data[buildings.Count];
-            for (var i = 0; i < buildingData.Length; i++)
-            {
-                buildingData[i] = new Building.Data(buildings[i]);
-            }
-           
-            _buildingDataArray = new NativeArray<Building.Data>(buildingData, Allocator.Persistent);
-            
-            _job = new BuildingUpdateJob
-            {
-                BuildingDataArray = _buildingDataArray
-            };
-        }
-
-        private void Update()
-        {
-            var jobHandle = _job.Schedule(buildings.Count, 1);
-            jobHandle.Complete();
-        }
-
-        private void OnDestroy()
-        {
-            _buildingDataArray.Dispose();
-        }
-    }
-}
-public struct TriangulationData
+public struct NodeTriangulateJob : IJob
 {
     public Vector3 normvec;
-    public List<Vector3> vertices;
-    public List<int> triangles;
-    public List<Node> nodes;
+    public NativeList<Vector3> vertices;
+    public NativeList<int> triangles;
+    public NativeList<Node> nodes;
     public int resolution;
 
-    public void TriangulateCellRows()
+    public void Execute()
     {
-        Debug.Log("nodecount: " + nodes.Count + ", reso: " + resolution);
+        TriangulateCellRows();
+    }
+
+    private void TriangulateCellRows()
+    {
+        Debug.Log("nodecount: " + nodes.Length + ", reso: " + resolution);
         int cells = resolution - 1;
         for (int i = 0, y = 0; y < cells; y++, i++)
         {
@@ -83,6 +51,8 @@ public struct TriangulationData
             cellType |= 4;
         if (d.filled)
             cellType |= 8;
+
+        Debug.Log(cellType);
 
         switch (cellType)
         {
@@ -207,7 +177,7 @@ public struct TriangulationData
         if (index != -1)
             return index;
         vertices.Add(point);
-        return vertices.Count - 1;
+        return vertices.Length - 1;
     }
     private void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
     {
@@ -230,7 +200,6 @@ public struct TriangulationData
     }
     private void AddPentagon(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 e)
     {
-        int vertexIndex = vertices.Count;
         int indexa = CheckAdd(a),
             indexb = CheckAdd(b),
             indexc = CheckAdd(c),
