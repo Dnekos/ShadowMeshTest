@@ -51,7 +51,7 @@ public class createMesh : MonoBehaviour
     public void CreateShadowMesh()
     {
         reticalRaycast();
-        if (hitinfo.collider == null)
+        if (hitinfo.collider == null || hitinfo.collider.tag != "Ground")
         {
             Debug.LogWarning("Did not hit anything");
             return;
@@ -70,23 +70,19 @@ public class createMesh : MonoBehaviour
     //https://catlikecoding.com/unity/tutorials/marching-squares/
     private void Triangulate()
     {
-        nlVertices.Clear();
-        this.nlTriangles.Clear();
-        mesh.Clear();
-
-
-        NativeList<Vector3> nlVert = new NativeList<Vector3>(Allocator.Persistent);
-        NativeList<int> nlTriangles = new NativeList<int>(Allocator.Persistent);
-        NativeList<Node> nlNodes = new NativeList<Node>(Allocator.Persistent);
-        nlTriangles.CopyFrom(this.nlTriangles.ToArray());
-        nlNodes.CopyFrom(this.nlNodes.ToArray());
-        nlVert.CopyFrom(nlVertices.ToArray());
+        NativeList<Vector3> jobVert = nlVertices;
+        NativeList<int> jobTriangles = nlTriangles;
+        NativeList<Node> jobNodes = nlNodes;
+        /*nlVertices.Dispose(jobHandle);
+        nlTriangles.Dispose(jobHandle);
+        nlNodes.Dispose(jobHandle);
+        */
         job = new NodeTriangulateJob()
         {
             normvec = normvec,
-            vertices = nlVert,
-            triangles = nlTriangles,
-            nodes = nlNodes,
+            vertices = jobVert,
+            triangles = jobTriangles,
+            nodes = jobNodes,
             resolution = resolution
 
         };
@@ -107,8 +103,9 @@ public class createMesh : MonoBehaviour
     {
         // check if the selected point is a shadow, abort if it has line of sight with any lights
         RaycastHit info;
+        int mask = ~((1 << 10) | (1 << 9));
         foreach (Light light in lightsources)
-            if (Physics.Raycast(point, light.transform.position - point, out info, 50f))
+            if (Physics.Raycast(point, light.transform.position - point, out info, 50f, mask))
                 if (info.transform.tag == "Light")
                     return false;
         return true;
@@ -245,17 +242,10 @@ public class createMesh : MonoBehaviour
 
     void InstantiateMesh()
     {
-        nlVertices.CopyFrom(job.vertices);
-        nlTriangles.CopyFrom(job.triangles);
-        nlNodes.CopyFrom(job.nodes);
-        job.vertices.Dispose();
-        job.triangles.Dispose();
-        job.nodes.Dispose();
-
         normvec = job.normvec;
         resolution = job.resolution;
 
-        if (nlVertices.Length != 0)
+        if (job.vertices.Length != 0)
         {
             //fix for inverted shadows 
             if (normvec == Vector3.down || normvec == Vector3.forward || normvec == Vector3.right)
@@ -267,8 +257,8 @@ public class createMesh : MonoBehaviour
             //for (int i = 0; i < vertices.Count; i++)
             //    normarray[i] = normvec;
 
-            mesh.vertices = nlVertices.ToArray();
-            mesh.triangles = nlTriangles.ToArray();
+            mesh.vertices = job.vertices.ToArray();
+            mesh.triangles = job.triangles.ToArray();
             //mesh.normals = normarray;
             mesh.RecalculateNormals();
 
@@ -279,9 +269,10 @@ public class createMesh : MonoBehaviour
 
             Instantiate(shadow_prefab);
 
-            nlVertices.Dispose(jobHandle);
-            nlTriangles.Dispose(jobHandle);
-            nlNodes.Dispose(jobHandle);
         }
+
+        job.vertices.Dispose();
+        job.triangles.Dispose();
+        job.nodes.Dispose();
     }
 }
